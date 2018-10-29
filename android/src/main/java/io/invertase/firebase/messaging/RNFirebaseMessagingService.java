@@ -18,6 +18,7 @@ public class RNFirebaseMessagingService extends FirebaseMessagingService {
   @Override
   public void onMessageReceived(RemoteMessage message) {
     Log.d(TAG, "onMessageReceived event received");
+    Log.d(TAG, "onMessageReceived event message" + message);
 
     if (message.getNotification() != null) {
       // It's a notification, pass to the Notifications module
@@ -41,23 +42,33 @@ public class RNFirebaseMessagingService extends FirebaseMessagingService {
       } else {
         try {
           // If the app is in the background we send it to the Headless JS Service
-          Intent headlessIntent = new Intent(
-            this.getApplicationContext(),
-            RNFirebaseBackgroundMessagingService.class
-          );
-          headlessIntent.putExtra("message", message);
-          this
-            .getApplicationContext()
-            .startService(headlessIntent);
-          HeadlessJsTaskService.acquireWakeLockNow(this.getApplicationContext());
+            launchApplication(this.getApplicationContext() , "INCALL");
+
+            if (Utils.isAppInForeground(this.getApplicationContext())) {
+                Intent messagingEvent = new Intent(MESSAGE_EVENT);
+                messagingEvent.putExtra("message", message);
+                // Broadcast it so it is only available to the RN Application
+                LocalBroadcastManager.getInstance(this).sendBroadcast(messagingEvent);
+            } else {
+                Intent headlessIntent = new Intent(this.getApplicationContext(), RNFirebaseBackgroundMessagingService.class);
+                headlessIntent.putExtra("message", message);
+                this.getApplicationContext().startService(headlessIntent);
+                HeadlessJsTaskService.acquireWakeLockNow(this.getApplicationContext());
+            }
         } catch (IllegalStateException ex) {
-          Log.e(
-            TAG,
-            "Background messages will only work if the message priority is set to 'high'",
-            ex
-          );
+          Log.e(TAG, "Background messages will only work if the message priority is set to 'high'", ex);
         }
       }
     }
+  }
+
+    private void launchApplication(android.content.Context context, String codeID) {
+    String packageName = context.getApplicationContext().getPackageName();
+    Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(packageName);
+    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    //launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    launchIntent.putExtra("codeID", codeID);
+    context.startActivity(launchIntent);
+    Log.i(TAG, "Start activity with extra: Launching: (" + packageName + ")  : " + codeID );
   }
 }
